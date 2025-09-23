@@ -1,0 +1,4 @@
+project_id = "zfvnqtqmunacfqydduze"
+
+[functions.search-restaurants]
+verify_jwt = false
