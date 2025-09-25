@@ -38,7 +38,11 @@ interface SearchFilters {
   maxPrice: number;
   maxDistance: number;
   cuisine: string[];
+  vegOnly: boolean;
+  jainFood: boolean;
 }
+
+
 
 const CUISINE_OPTIONS = [
   'Italian', 'Mexican', 'Chinese', 'Japanese', 'Indian', 'Thai', 'American', 
@@ -55,7 +59,10 @@ const RestaurantSearch = () => {
   const [filters, setFilters] = useState<SearchFilters>({
     maxPrice: 4,
     maxDistance: 10,
-    cuisine: []
+    cuisine: [],
+    vegOnly: false,
+    jainFood: false,
+    menu: []
   });
   
   const { toast } = useToast();
@@ -90,10 +97,14 @@ const RestaurantSearch = () => {
 
       const searchParams = {
         location: locationToSearch,
-        radius: filters.maxDistance * 1000, // Convert to meters
+        radius: filters.maxDistance * 1000, // meters
         max_price: filters.maxPrice,
-        cuisine: filters.cuisine.join(',')
+        cuisine: filters.cuisine.join(','),
+        veg_only: filters.vegOnly,
+        jain_food: filters.jainFood
       };
+
+
 
       console.log('Search params:', searchParams);
 
@@ -170,7 +181,7 @@ const RestaurantSearch = () => {
   };
 
   const getPriceDisplay = (level: number) => {
-    return '$'.repeat(level || 1);
+    return ''.repeat(level || 1);
   };
 
   return (
@@ -195,36 +206,72 @@ const RestaurantSearch = () => {
             </p>
             
             {/* Search Section */}
-            <Card className="shadow-warm border-0 bg-card/80 backdrop-blur-sm">
-              <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <SearchIcon className="w-5 h-5 text-primary" />
-                Where are you looking to dine?
-              </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter city, address, or zip code..."
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleLocationSearch()}
-                    className="flex-1"
-                  />
-                  <Button 
-                    variant="location" 
-                    onClick={handleUseCurrentLocation}
-                    disabled={isGettingLocation}
-                  >
-                    {isGettingLocation ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <MapPin className="w-4 h-4" />
-                    )}
-                    Use My Location
-                  </Button>
-                </div>
-                
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Location Section - Left Side */}
+              <Card className="shadow-warm border-0 bg-card/80 backdrop-blur-sm md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    Location
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter city, address, or zip code..."
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleLocationSearch()}
+                      className="flex-1"
+                    />
+                    <Button 
+                      variant="location" 
+                      onClick={handleUseCurrentLocation}
+                      disabled={isGettingLocation}
+                    >
+                      {isGettingLocation ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <MapPin className="w-4 h-4" />
+                      )}
+                      Use My Location
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Filters - Right Side */}
+              <Card className="shadow-warm border-0 bg-card/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <SearchIcon className="w-5 h-5 text-primary" />
+                    Quick Filters
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant={filters.vegOnly ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilters(prev => ({ ...prev, vegOnly: !prev.vegOnly }))}
+                      className="flex-1"
+                    >
+                      🥬 Vegetarian
+                    </Button>
+                    <Button
+                      variant={filters.maxPrice <= 2 ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setFilters(prev => ({ ...prev, maxPrice: prev.maxPrice <= 2 ? 4 : 2 }))}
+                      className="flex-1"
+                    >
+                      💰 Budget-Friendly
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Search Button - Full Width Below */}
+              <div className="md:col-span-3">
                 <Button 
                   variant="hero" 
                   size="lg" 
@@ -234,18 +281,18 @@ const RestaurantSearch = () => {
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
                       Searching Restaurants...
                     </>
                   ) : (
                     <>
-                      <SearchIcon className="w-4 h-4" />
+                      <SearchIcon className="w-4 h-4 mr-2" />
                       Find Restaurants
                     </>
                   )}
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -273,10 +320,10 @@ const RestaurantSearch = () => {
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>$ Budget</span>
-                  <span>$$ Moderate</span>
-                  <span>$$$ Upscale</span>
-                  <span>$$$$ Fine Dining</span>
+                  <span>Budget</span>
+                  <span>Moderate</span>
+                  <span>Upscale</span>
+                  <span>Fine Dining</span>
                 </div>
               </div>
 
@@ -294,6 +341,18 @@ const RestaurantSearch = () => {
                   className="w-full"
                 />
               </div>
+              {/* Veg / Jain Toggle */}
+                <div className="flex gap-4 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={filters.vegOnly}
+                      onChange={(e) => setFilters(prev => ({ ...prev, vegOnly: e.target.checked }))}
+                      className="form-checkbox"
+                    />
+                    Veg Only
+                  </label>
+                </div>
 
               {/* Cuisine Types */}
               <div>

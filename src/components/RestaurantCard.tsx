@@ -25,6 +25,7 @@ interface Restaurant {
     top_positive_quote?: string;
     top_negative_quote?: string;
     confidence: number;
+    dishes_to_try?: string[];
   };
 }
 
@@ -159,6 +160,17 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
             </CollapsibleTrigger>
             
             <CollapsibleContent className="space-y-3 mt-3">
+            {restaurant.ai_summary?.dishes_to_try?.length > 0 && (
+              <div className="mt-2">
+                <h4 className="font-medium text-sm">Recommended Dishes:</h4>
+                <ul className="list-disc list-inside text-sm text-muted-foreground">
+                  {restaurant.ai_summary.dishes_to_try.map((dish, idx) => (
+                    <li key={idx}>{dish}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
               {/* Pros */}
               {restaurant.ai_summary.pros.length > 0 && (
                 <div>

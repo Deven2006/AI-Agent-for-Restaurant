@@ -8,11 +8,15 @@ const corsHeaders = {
 };
 
 interface SearchParams {
-  location: string; // Can be "lat,lng" or address
+  location: string;           // "lat,lng" or address
   radius?: number;
   max_price?: number;
   cuisine?: string;
+  veg_only?: boolean;
+  jain_food?: boolean;
+  menu?: string[];            // New field: dishes user wants
 }
+
 
 interface PlaceDetails {
   place_id: string;
@@ -41,10 +45,13 @@ interface GeminiAnalysis {
   short_summary: string;
   pros: string[];
   cons: string[];
+  dishes_to_try?: string[];
+  matching_menu_items?: string[];   // New field
   top_positive_quote?: string;
   top_negative_quote?: string;
   confidence: number;
 }
+
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -65,9 +72,9 @@ serve(async (req) => {
       throw new Error('Missing required API keys');
     }
 
-    const { location, radius = 5000, max_price = 4, cuisine = '' }: SearchParams = await req.json();
+    const { location, radius = 5000, max_price = 4, cuisine = '', veg_only = false, jain_food = false, menu = [] }: SearchParams = await req.json();
 
-    console.log('Search params:', { location, radius, max_price, cuisine });
+    console.log('Search params:', { location, radius, max_price, cuisine, veg_only, jain_food, menu });
 
     // Step 1: Convert location to coordinates if needed
     let coordinates: { lat: number; lng: number };
@@ -117,7 +124,7 @@ serve(async (req) => {
     console.log(`Found ${placesData.results.length} restaurants`);
 
     // Step 3: Get detailed information for each restaurant
-    const restaurantPromises = placesData.results.slice(0, 12).map(async (place: any) => {
+    const restaurantPromises = placesData.results.slice(0, 25).map(async (place: any) => {
       try {
         // Check cache first
         const { data: cachedRestaurant } = await supabaseClient
@@ -191,35 +198,45 @@ serve(async (req) => {
         } else if (restaurantData.reviews && restaurantData.reviews.length > 0) {
           // Generate AI analysis using Gemini
           const reviewTexts = restaurantData.reviews
-            .filter((review: any) => review.text && review.text.length > 20)
-            .slice(0, 6)
-            .map((review: any) => review.text);
+        .filter((review: any) => review.text && review.text.length > 20)
+        .slice(0, 12) // take more reviews if available
+        .map((review: any) => review.text);
+
 
           if (reviewTexts.length > 0) {
             const analysisPrompt = `You are an assistant that MUST return JSON only.
-Summarize the restaurant based ONLY on the provided reviews, rating, and price_level.
-Do not invent facts.
+Make sure this summary is unique for ${restaurantData.name} and not copied from other restaurants based ONLY on the provided reviews, rating, price_level, and cuisine.
+Do not invent facts. Do not copy summaries across restaurants.
+Summaries must be short (max 2 sentences).
+Include a list of suggested dishes to try based on reviews and filters (veg_only if selected).
+Also, if user has provided a menu, highlight matching dishes from the menu that the restaurant offers.
 
 Input:
 {
   "place_id": "${restaurantData.place_id}",
   "name": "${restaurantData.name}",
-  "rating": ${restaurantData.rating || 0},
-  "price_level": ${restaurantData.price_level || 1},
-  "reviews": ${JSON.stringify(reviewTexts)}
-}
+  "rating": ${restaurantData.rating},
+  "price_level": ${restaurantData.price_level},
+  "cuisine": "${restaurantData.types?.join(', ')}",
+  "address": "${restaurantData.formatted_address}",
+  "reviews": ${JSON.stringify(reviewTexts)},
+  "filters": ${JSON.stringify({ veg_only, jain_food, menu })}
+
 
 Output (strict JSON):
 {
   "place_id": "${restaurantData.place_id}",
   "rank_score": <0-100>,
-  "short_summary": "<20-30 words>",
+  "short_summary": "<1-2 sentences based on reviews, rating, hygiene>",
   "pros": ["...","..."],
   "cons": ["...","..."],
+  "dishes_to_try": ["Dish 1","Dish 2","Dish 3"],
+  "matching_menu_items": ["Dish from user menu if available"],
   "top_positive_quote": "<short excerpt>",
   "top_negative_quote": "<short excerpt>",
   "confidence": <0-1>
 }`;
+
 
             try {
               const geminiResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' + geminiApiKey, {
@@ -243,14 +260,26 @@ Output (strict JSON):
               });
 
               const geminiData = await geminiResponse.json();
-              
+
+              // Log full Gemini response
+              console.log('Gemini full response:', JSON.stringify(geminiData, null, 2));
+
               if (geminiData.candidates && geminiData.candidates[0]) {
                 const responseText = geminiData.candidates[0].content.parts[0].text;
+                
+                // Log the raw text Gemini returned
+                console.log('Gemini raw text output:', responseText);
+
+                // Clean JSON (remove ```json if Gemini wrapped it)
                 const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
                 
+                // Log cleaned text before parsing
+                console.log('Gemini cleaned JSON text:', cleanJson);
+
                 try {
                   const analysis: GeminiAnalysis = JSON.parse(cleanJson);
-                  
+                  console.log('Gemini parsed JSON:', analysis);
+   
                   // Validate and save AI summary
                   aiSummary = {
                     place_id: analysis.place_id,
